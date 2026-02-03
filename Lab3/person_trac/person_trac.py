@@ -4,14 +4,22 @@ from picamera2 import Picamera2
 import time
 from gpiozero import AngularServo
 
-last_time = time.time()
 
 
-servo_x = AngularServo(18, min_pulse_width=0.0006, max_pulse_width=0.0024)
-servo_y = AngularServo(19, min_pulse_width=0.0006, max_pulse_width=0.0024)
+servo_x = AngularServo(23, min_pulse_width=0.0006, max_pulse_width=0.0024)
+servo_y = AngularServo(24, min_pulse_width=0.0006, max_pulse_width=0.0024)
 
 pos_x = 0
 pos_y = 0
+
+
+
+err_x_prev = 0
+err_y_prev = 0
+
+last_control_time = time.time()
+CONTROL_DT = 0.1  # 10 Hz
+
 
 # MediaPipe Pose
 mp_pose = mp.solutions.pose
@@ -35,6 +43,9 @@ prev_err_y = 0
 
 integral_x = 0
 integral_y = 0
+
+
+
 
 # Camera setup
 picam2 = Picamera2()
@@ -81,37 +92,59 @@ while True:
         #)
 
         # Error signal (for pan-tilt)
-        err_x = cx - w // 2
-        err_y = cy - h // 2
+        err_x = (cx - w//2) / (w//2)   # range ~[-1, 1]
+        err_y = (cy - h//2) / (h//2)
 
-        kp = 0.05
-        kd = 0.02
-        ki = 0.001
         now = time.time()
-        dt = now - last_time if last_time else 0.01
-        last_time = now
-
-        
 
 
-        x_cor,i_x = pid_controller(err_x, kp, ki, kd, prev_err_x, integral_x, dt)
-        y_cor, i_y = pid_controller(err_y, kp, ki, kd, prev_err_y, integral_y, dt)
 
-        prev_err_x = err_x
-        prev_err_y = err_y
+        if now - last_control_time >= CONTROL_DT:
+            dt = now - last_control_time
+            last_control_time = now
 
-        integral_x += i_x
-        integral_y += i_y
+            # Deadzone
+            DEADZONE = 0.05
+            if abs(err_x) < DEADZONE: err_x = 0
+            if abs(err_y) < DEADZONE: err_y = 0
 
-        pos_x += x_cor
-        pos_y += y_cor
+            # Low-pass filter
+            ALPHA = 0.8
+            err_x = ALPHA * err_x_prev + (1 - ALPHA) * err_x
+            err_y = ALPHA * err_y_prev + (1 - ALPHA) * err_y
+            err_x_prev = err_x
+            err_y_prev = err_y
 
-        pos_x = max(-60, min(60, pos_x))
-        pos_y = max(-45, min(45, pos_y))
+            # PID gains
+            kp = 0.4
+            ki = 0.02
+            kd = 0.0
 
+            x_cor, integral_x = pid_controller(err_x, kp, ki, kd, prev_err_x, integral_x, dt)
+            y_cor, integral_y = pid_controller(err_y, kp, ki, kd, prev_err_y, integral_y, dt)
 
-        servo_x.angle = pos_x
-        servo_y.angle = pos_y
+            prev_err_x = err_x
+            prev_err_y = err_y
+
+            # Clamp integral (anti-windup)
+            integral_x = max(-1.0, min(1.0, integral_x))
+            integral_y = max(-1.0, min(1.0, integral_y))
+
+            # Limit step size
+            MAX_STEP = 2
+            x_cor = max(-MAX_STEP, min(MAX_STEP, x_cor))
+            y_cor = max(-MAX_STEP, min(MAX_STEP, y_cor))
+
+            # Update servo positions
+            pos_x += x_cor
+            pos_y += y_cor
+
+            pos_x = max(-60, min(60, pos_x))
+            pos_y = max(-45, min(45, pos_y))
+
+            servo_x.angle = pos_x
+            servo_y.angle = pos_y
+
 
         cv2.putText(frame,
                     f"err_x={err_x}, err_y={err_y}",
