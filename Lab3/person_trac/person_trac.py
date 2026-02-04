@@ -2,6 +2,41 @@ import cv2
 import mediapipe as mp
 from picamera2 import Picamera2
 import time
+#from gpiozero import AngularServo
+
+import pigpio
+
+pi = pigpio.pi()
+if not pi.connected:
+    raise RuntimeError("pigpio daemon not running")
+
+PAN_PIN = 23
+TILT_PIN = 24
+
+pi.set_mode(PAN_PIN, pigpio.OUTPUT)
+pi.set_mode(TILT_PIN, pigpio.OUTPUT)
+
+def angle_to_pulse(angle, min_angle, max_angle,
+                   min_pulse=1000, max_pulse=2000):
+    angle = max(min_angle, min(max_angle, angle))
+    return min_pulse + (angle - min_angle) * (max_pulse - min_pulse) / (max_angle - min_angle)
+
+
+
+#servo_x = AngularServo(23, min_pulse_width=0.0006, max_pulse_width=0.0024)
+#servo_y = AngularServo(24, min_pulse_width=0.0006, max_pulse_width=0.0024)
+
+pos_x = 0
+pos_y = 0
+
+
+
+err_x_prev = 0
+err_y_prev = 0
+
+last_control_time = time.time()
+CONTROL_DT = 0.1  # 10 Hz
+
 
 # MediaPipe Pose
 mp_pose = mp.solutions.pose
@@ -12,6 +47,22 @@ pose = mp_pose.Pose(
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5
 )
+
+def pid_controller(error, kp, ki, kd, previous_error, integral, dt):
+    integral += error * dt
+    derivative = (error - previous_error) / dt
+    control = kp * error + ki * integral + kd * derivative
+    return control, integral
+
+
+prev_err_x = 0
+prev_err_y = 0
+
+integral_x = 0
+integral_y = 0
+
+
+
 
 # Camera setup
 picam2 = Picamera2()
@@ -35,7 +86,7 @@ while True:
     if results.pose_landmarks:
         lm = results.pose_landmarks.landmark
 
-        # Hip center (primary)
+        # shoulder center (primary)
         left_sh = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
         right_sh = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
 
@@ -43,7 +94,7 @@ while True:
             cx = int((left_sh.x + right_sh.x) * 0.5 * w)
             cy = int((left_sh.y + right_sh.y) * 0.5 * h)
         else:
-            # Shoulder fallback
+            # hip fallback
             left_hip = lm[mp_pose.PoseLandmark.LEFT_HIP]
             right_hip = lm[mp_pose.PoseLandmark.RIGHT_HIP]
             cx = int((left_hip.x + right_hip.x) * 0.5 * w)
@@ -58,8 +109,67 @@ while True:
         #)
 
         # Error signal (for pan-tilt)
-        err_x = cx - w // 2
-        err_y = cy - h // 2
+        err_x = (cx - w//2) / (w//2)   # range ~[-1, 1]
+        err_y = (cy - h//2) / (h//2)
+
+        now = time.time()
+
+
+
+        if now - last_control_time >= CONTROL_DT:
+            dt = now - last_control_time
+            last_control_time = now
+
+            # Deadzone
+            DEADZONE = 0.05
+            if abs(err_x) < DEADZONE: err_x = 0
+            if abs(err_y) < DEADZONE: err_y = 0
+
+            # Low-pass filter
+            ALPHA = 0.8
+            err_x = ALPHA * err_x_prev + (1 - ALPHA) * err_x
+            err_y = ALPHA * err_y_prev + (1 - ALPHA) * err_y
+            err_x_prev = err_x
+            err_y_prev = err_y
+
+            # PID gains
+            kp = 0.4
+            ki = 0.02
+            kd = 0.0
+
+            x_cor, integral_x = pid_controller(err_x, kp, ki, kd, prev_err_x, integral_x, dt)
+            y_cor, integral_y = pid_controller(err_y, kp, ki, kd, prev_err_y, integral_y, dt)
+
+            prev_err_x = err_x
+            prev_err_y = err_y
+
+            # Clamp integral (anti-windup)
+            integral_x = max(-1.0, min(1.0, integral_x))
+            integral_y = max(-1.0, min(1.0, integral_y))
+
+            # Limit step size
+            MAX_STEP = 2
+            x_cor = max(-MAX_STEP, min(MAX_STEP, x_cor))
+            y_cor = max(-MAX_STEP, min(MAX_STEP, y_cor))
+
+            # Update servo positions
+            pos_x += x_cor
+            pos_y += y_cor
+
+
+            pulse_x = angle_to_pulse(pos_x, -40, 40)
+            pulse_y = angle_to_pulse(pos_y, -30, 30)
+            
+            pi.set_servo_pulsewidth(PAN_PIN, pulse_x)
+            pi.set_servo_pulsewidth(TILT_PIN, pulse_y)
+
+            
+            #pos_x = max(-60, min(60, pos_x))
+            #pos_y = max(-45, min(45, pos_y))
+
+            servo_x.angle = pos_x
+            servo_y.angle = pos_y
+
 
         cv2.putText(frame,
                     f"err_x={err_x}, err_y={err_y}",
