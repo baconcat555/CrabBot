@@ -1,0 +1,44 @@
+import pigpio
+import time
+
+# Connect to pigpio daemon
+pi = pigpio.pi()
+if not pi.connected:
+    raise RuntimeError("pigpio daemon not running")
+
+PAN_PIN = 23
+TILT_PIN = 24
+
+pi.set_mode(PAN_PIN, pigpio.OUTPUT)
+pi.set_mode(TILT_PIN, pigpio.OUTPUT)
+
+def angle_to_pulse(angle, min_angle, max_angle,
+                   min_pulse=1000, max_pulse=2000):
+    angle = max(min_angle, min(max_angle, angle))
+    return min_pulse + (angle - min_angle) * (max_pulse - min_pulse) / (max_angle - min_angle)
+
+try:
+    while True:
+        # Move to one position
+        pan_angle = 20
+        tilt_angle = -10
+
+        pi.set_servo_pulsewidth(PAN_PIN, angle_to_pulse(pan_angle, -40, 40))
+        pi.set_servo_pulsewidth(TILT_PIN, angle_to_pulse(tilt_angle, -30, 30))
+        time.sleep(1)
+
+        # Move to another position
+        pan_angle = -20
+        tilt_angle = 10
+
+        pi.set_servo_pulsewidth(PAN_PIN, angle_to_pulse(pan_angle, -40, 40))
+        pi.set_servo_pulsewidth(TILT_PIN, angle_to_pulse(tilt_angle, -30, 30))
+        time.sleep(1)
+
+except KeyboardInterrupt:
+    pass
+finally:
+    # Stop servos cleanly
+    pi.set_servo_pulsewidth(PAN_PIN, 0)
+    pi.set_servo_pulsewidth(TILT_PIN, 0)
+    pi.stop()

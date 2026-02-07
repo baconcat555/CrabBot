@@ -1,19 +1,29 @@
-from gpiozero import AngularServo
-from time import sleep
-
-# The default GPIO Zero servo range works well with 9g servos
-# Connect Signal to GPIO 17 (Pin 11)
-#servo_x = AngularServo(23, min_pulse_width=0.0006, max_pulse_width=0.0024)
-servo_y = AngularServo(24, min_pulse_width=0.0006, max_pulse_width=0.0024)
-
-try:
+import serial
+import time
+n = 0
+nn = str(n) + "\n"
+if __name__== '__main__':
+    ser = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+    ser.reset_input_buffer()
     while True:
-        print("Set to Minimum")
-        servo_y.angle = 45 # Moves to 0 degrees
-        sleep(1)
-        
-        #print("Set to Maximum")
-        #myServo.max() # Moves to 180 degrees
-        #sleep(1)
-except KeyboardInterrupt:
-    print("Program stopped")
+        ser.write(nn.encode('utf-8'))
+        n += 1
+        nn = str(n) + "\n"
+        # if ser.in_waiting > 0:
+        line = ser.readline().decode('utf-8').rstrip()
+        print(line)
+        time.sleep(1)
+
+
+
+
+
+# time.sleep(2)
+
+# while True:
+#     message = f"{5},{6}\n"
+#     ser.write(message.encode())
+
+#     time.sleep(1)
+#     print(ser.readline())
+    

@@ -4,14 +4,24 @@ from picamera2 import Picamera2
 import time
 from gpiozero import AngularServo
 
+import serial
+import time
 
+# Open serial to Arduino
+ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+time.sleep(2)
+
+def send_to_arduino(pan, tilt):
+    message = f"{pan},{tilt}\n"
+    ser.write(message.encode())
 
 
 servo_x = AngularServo(23, min_pulse_width=0.0006, max_pulse_width=0.0024)
 servo_y = AngularServo(24, min_pulse_width=0.0006, max_pulse_width=0.0024)
 
-pos_x = 0
-pos_y = 45
+pos_x = 90
+pos_y = 100
+
 
 
 
@@ -19,7 +29,7 @@ err_x_prev = 0
 err_y_prev = 0
 
 last_control_time = time.time()
-CONTROL_DT = 1000  # 10 Hz
+CONTROL_DT = 10  # 10 Hz
 
 
 # MediaPipe Pose
@@ -107,22 +117,22 @@ while True:
             dt = now - last_control_time
             last_control_time = now
 
-            # Deadzone
-            DEADZONE = 0.05
-            if abs(err_x) < DEADZONE: err_x = 0
-            if abs(err_y) < DEADZONE: err_y = 0
+            # # Deadzone
+            # DEADZONE = 1
+            # if abs(err_x) < DEADZONE: err_x = 0
+            # if abs(err_y) < DEADZONE: err_y = 0
 
-            # Low-pass filter
-            ALPHA = 0.2
-            err_x = ALPHA * err_x_prev + (1 - ALPHA) * err_x
-            err_y = ALPHA * err_y_prev + (1 - ALPHA) * err_y
-            err_x_prev = err_x
-            err_y_prev = err_y
+            # # Low-pass filter
+            # ALPHA = 0.2
+            # err_x = ALPHA * err_x_prev + (1 - ALPHA) * err_x
+            # err_y = ALPHA * err_y_prev + (1 - ALPHA) * err_y
+            # err_x_prev = err_x
+            # err_y_prev = err_y
 
             # PID gains
-            kp = 0.4
-            ki = 0.0 # 0.02
-            kd = 0.0 # 0.0
+            kp = 0.8
+            ki =  0.02
+            kd =  0.0005
 
             x_cor, integral_x = pid_controller(err_x, kp, ki, kd, prev_err_x, integral_x, dt)
             y_cor, integral_y = pid_controller(err_y, kp, ki, kd, prev_err_y, integral_y, dt)
@@ -130,24 +140,27 @@ while True:
             prev_err_x = err_x
             prev_err_y = err_y
 
-            # Clamp integral (anti-windup)
-            integral_x = max(-1.0, min(1.0, integral_x))
-            integral_y = max(-1.0, min(1.0, integral_y))
+            # # Clamp integral (anti-windup)
+            # integral_x = max(-1.0, min(1.0, integral_x))
+            # integral_y = max(-1.0, min(1.0, integral_y))
 
-            # Limit step size
-            MAX_STEP = 3
-            x_cor = max(-MAX_STEP, min(MAX_STEP, x_cor))
-            y_cor = max(-MAX_STEP, min(MAX_STEP, y_cor))
+            # # Limit step size
+            # MAX_STEP = 3
+            # x_cor = max(-MAX_STEP, min(MAX_STEP, x_cor))
+            # y_cor = max(-MAX_STEP, min(MAX_STEP, y_cor))
 
             # Update servo positions
             pos_x -= x_cor
-            pos_y -= y_cor
+            pos_y += y_cor
 
-            pos_x = max(-60, min(60, pos_x))
-            pos_y = max(-45, min(45, pos_y))
+            # pos_x = max(-60, min(60, pos_x))
+            # pos_y = max(-45, min(45, pos_y))
 
-            servo_x.angle = pos_x
-            servo_y.angle = pos_y
+            send_to_arduino(pos_x, pos_y)
+
+            time.sleep(0.02)
+            line = ser.readline().decode('utf-8').rstrip()
+            print(line)
 
 
         cv2.putText(frame,
