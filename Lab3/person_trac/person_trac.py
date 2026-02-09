@@ -29,7 +29,7 @@ err_x_prev = 0
 err_y_prev = 0
 
 last_control_time = time.time()
-CONTROL_DT = 10  # 10 Hz
+CONTROL_DT = 0.0001
 
 
 # MediaPipe Pose
@@ -103,8 +103,8 @@ while True:
         #)
 
         # Error signal (for pan-tilt)
-        err_x = ((cx - w//2) / (w//2))*50  # range ~[-1, 1]
-        err_y = ((cy - h//2) / (h//2))*50
+        err_x = ((cx - w//2) / (w//2))*10
+        err_y = ((cy - h//2) / (h//2))*10
 
         print(err_x)
         print(err_y)
@@ -117,7 +117,7 @@ while True:
             dt = now - last_control_time
             last_control_time = now
 
-            # # Deadzone
+            # Deadzone
             # DEADZONE = 1
             # if abs(err_x) < DEADZONE: err_x = 0
             # if abs(err_y) < DEADZONE: err_y = 0
@@ -130,9 +130,13 @@ while True:
             # err_y_prev = err_y
 
             # PID gains
-            kp = 0.8
-            ki =  0.02
-            kd =  0.0005
+            kp = 0.5
+            ki =  0.05
+            kd =  0.1
+
+            # kp_y = 0.01
+            # ki_y = 0.0
+            # kd_y = 0
 
             x_cor, integral_x = pid_controller(err_x, kp, ki, kd, prev_err_x, integral_x, dt)
             y_cor, integral_y = pid_controller(err_y, kp, ki, kd, prev_err_y, integral_y, dt)
@@ -144,10 +148,10 @@ while True:
             # integral_x = max(-1.0, min(1.0, integral_x))
             # integral_y = max(-1.0, min(1.0, integral_y))
 
-            # # Limit step size
-            # MAX_STEP = 3
-            # x_cor = max(-MAX_STEP, min(MAX_STEP, x_cor))
-            # y_cor = max(-MAX_STEP, min(MAX_STEP, y_cor))
+            # Limit step size
+            MAX_STEP = 5
+            x_cor = max(-MAX_STEP, min(MAX_STEP, x_cor))
+            y_cor = max(-MAX_STEP, min(MAX_STEP, y_cor))
 
             # Update servo positions
             pos_x -= x_cor
@@ -158,9 +162,9 @@ while True:
 
             send_to_arduino(pos_x, pos_y)
 
-            time.sleep(0.02)
+            time.sleep(0.00001)
             line = ser.readline().decode('utf-8').rstrip()
-            print(line)
+            #print(line)
 
 
         cv2.putText(frame,
