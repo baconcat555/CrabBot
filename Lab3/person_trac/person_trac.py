@@ -20,7 +20,7 @@ servo_x = AngularServo(23, min_pulse_width=0.0006, max_pulse_width=0.0024)
 servo_y = AngularServo(24, min_pulse_width=0.0006, max_pulse_width=0.0024)
 
 pos_x = 90
-pos_y = 100
+pos_y = 90
 
 
 
@@ -103,11 +103,11 @@ while True:
         #)
 
         # Error signal (for pan-tilt)
-        err_x = ((cx - w//2) / (w//2))*10
-        err_y = ((cy - h//2) / (h//2))*10
+        err_x = ((cx - w//2) / (w//2))
+        err_y = ((cy - h//2) / (h//2))
 
-        print(err_x)
-        print(err_y)
+        # print(err_x)
+        # print(err_y)
 
         now = time.time()
 
@@ -130,9 +130,9 @@ while True:
             # err_y_prev = err_y
 
             # PID gains
-            kp = 0.5
-            ki =  0.05
-            kd =  0.1
+            kp = 1
+            ki =  0.01
+            kd =  0.0001
 
             # kp_y = 0.01
             # ki_y = 0.0
@@ -149,9 +149,9 @@ while True:
             # integral_y = max(-1.0, min(1.0, integral_y))
 
             # Limit step size
-            MAX_STEP = 5
-            x_cor = max(-MAX_STEP, min(MAX_STEP, x_cor))
-            y_cor = max(-MAX_STEP, min(MAX_STEP, y_cor))
+            # MAX_STEP = 5
+            # x_cor = max(-MAX_STEP, min(MAX_STEP, x_cor))
+            # y_cor = max(-MAX_STEP, min(MAX_STEP, y_cor))
 
             # Update servo positions
             pos_x -= x_cor
@@ -159,12 +159,15 @@ while True:
 
             # pos_x = max(-60, min(60, pos_x))
             # pos_y = max(-45, min(45, pos_y))
+            #print("x: ",pos_x, "y: ",pos_y)
+            min_err = 0.01
+            if (err_x > min_err) & (err_y > min_err):
 
-            send_to_arduino(pos_x, pos_y)
+                send_to_arduino(pos_x, pos_y)
 
             time.sleep(0.00001)
             line = ser.readline().decode('utf-8').rstrip()
-            #print(line)
+            print(line)
 
 
         cv2.putText(frame,
