@@ -2,7 +2,8 @@ import cv2
 import mediapipe as mp
 from picamera2 import Picamera2
 import time
-from gpiozero import AngularServo
+from queue import Queue
+#from gpiozero import AngularServo
 
 import serial
 import time
@@ -11,18 +12,35 @@ import time
 ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
 time.sleep(2)
 
+size_integral = 5
+integral_x = Queue(maxsize=size_integral)
+integral_y = Queue(maxsize=size_integral)
+
+cx = Queue(maxsize=size_integral)
+cy = Queue(maxsize=size_integral)
+
+for i in range(size_integral):
+    integral_x.put(0)
+    integral_y.put(0)
+    cx.put(0)
+    cy.put(0)
+    
+
+
+
+
 def send_to_arduino(pan, tilt):
     message = f"{pan},{tilt}\n"
     ser.write(message.encode())
 
 
-servo_x = AngularServo(23, min_pulse_width=0.0006, max_pulse_width=0.0024)
-servo_y = AngularServo(24, min_pulse_width=0.0006, max_pulse_width=0.0024)
+
 
 pos_x = 90
-pos_y = 90
+pos_y = 140
 
-
+cx_ = 0
+cy_ = 0
 
 
 err_x_prev = 0
@@ -43,17 +61,18 @@ pose = mp_pose.Pose(
 )
 
 def pid_controller(error, kp, ki, kd, previous_error, integral, dt):
-    integral += error * dt
+    integral.get()
+    integral.put(error * dt)
+    total = sum(list(integral.queue))
     derivative = (error - previous_error) / dt
-    control = kp * error + ki * integral + kd * derivative
+    control = kp * error + ki * total + kd * derivative
     return control, integral
 
 
 prev_err_x = 0
 prev_err_y = 0
 
-integral_x = 0
-integral_y = 0
+
 
 
 
@@ -84,18 +103,25 @@ while True:
         left_sh = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
         right_sh = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
 
+        cx.get()
+        cy.get()
+
         if left_sh.visibility > 0.5 and right_sh.visibility > 0.5:
-            cx = int((left_sh.x + right_sh.x) * 0.5 * w)
-            cy = int((left_sh.y + right_sh.y) * 0.5 * h)
+            cx.put(int((left_sh.x + right_sh.x) * 0.5 * w))
+            cy.put(int((left_sh.y + right_sh.y) * 0.5 * h))
+            cx_ = int((left_sh.x + right_sh.x) * 0.5 * w)
+            cy_ = int((left_sh.y + right_sh.y) * 0.5 * h)
         else:
             # hip fallback
             left_hip = lm[mp_pose.PoseLandmark.LEFT_HIP]
             right_hip = lm[mp_pose.PoseLandmark.RIGHT_HIP]
-            cx = int((left_hip.x + right_hip.x) * 0.5 * w)
-            cy = int((left_hip.y + right_hip.y) * 0.5 * h)
+            cx.put(int((left_hip.x + right_hip.x) * 0.5 * w))
+            cy.put(int((left_hip.y + right_hip.y) * 0.5 * h))
+            cx_ = int((left_hip.x + right_hip.x) * 0.5 * w)
+            cy_ = int((left_hip.y + right_hip.y) * 0.5 * h)
 
         # Draw target
-        cv2.circle(frame, (cx, cy), 8, (0, 255, 0), -1)
+        cv2.circle(frame, (cx_, cy_), 8, (0, 255, 0), -1)
 
         # Draw skeleton (optional) TURN ON IF WANT THE LINES
         #mp.solutions.drawing_utils.draw_landmarks(
@@ -103,11 +129,11 @@ while True:
         #)
 
         # Error signal (for pan-tilt)
-        err_x = ((cx - w//2) / (w//2))
-        err_y = ((cy - h//2) / (h//2))
+        err_x = ((sum(list(cx.queue))/size_integral - w//2) / (w//2))
+        err_y = ((sum(list(cy.queue))/size_integral - h//2) / (h//2))
 
-        # print(err_x)
-        # print(err_y)
+        print("err_x: ",err_x)
+        print("err_y: ",err_y)
 
         now = time.time()
 
@@ -130,9 +156,9 @@ while True:
             # err_y_prev = err_y
 
             # PID gains
-            kp = 1
-            ki =  0.01
-            kd =  0.0001
+            kp = 5
+            ki =  0.1
+            kd =  0
 
             # kp_y = 0.01
             # ki_y = 0.0
@@ -140,6 +166,7 @@ while True:
 
             x_cor, integral_x = pid_controller(err_x, kp, ki, kd, prev_err_x, integral_x, dt)
             y_cor, integral_y = pid_controller(err_y, kp, ki, kd, prev_err_y, integral_y, dt)
+            # print(list(integral_y.queue))
 
             prev_err_x = err_x
             prev_err_y = err_y
@@ -160,14 +187,14 @@ while True:
             # pos_x = max(-60, min(60, pos_x))
             # pos_y = max(-45, min(45, pos_y))
             #print("x: ",pos_x, "y: ",pos_y)
-            min_err = 0.01
-            if (err_x > min_err) & (err_y > min_err):
+            # min_err = 0.001
+            # if (err_x > min_err) or (err_y > min_err):
 
-                send_to_arduino(pos_x, pos_y)
+            send_to_arduino(pos_x, pos_y)
 
-            time.sleep(0.00001)
-            line = ser.readline().decode('utf-8').rstrip()
-            print(line)
+            time.sleep(0.2)
+            #line = ser.readline().decode('utf-8').rstrip()
+            # print(line)
 
 
         cv2.putText(frame,
