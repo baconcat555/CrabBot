@@ -156,7 +156,7 @@ while True:
             # err_y_prev = err_y
 
             # PID gains
-            kp = 5
+            kp = 1
             ki =  0.1
             kd =  0
 
