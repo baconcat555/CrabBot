@@ -162,6 +162,7 @@ def inverse_kinematics(Fx, Fy):
         vy = Fy - Dy
         dist = math.hypot(vx, vy)
 
+        #avoid divide by 0
         if dist == 0:
             continue
 
@@ -193,7 +194,7 @@ def inverse_kinematics(Fx, Fy):
             theta_crank_abs = math.atan2(By-Ey, Bx-Ex)
             theta_crank_rel = theta_crank_abs - theta_black
 
-            if math.pi/6 <= theta_crank_rel <= math.pi:
+            if 0 <= theta_crank_rel <= math.pi:
 
                 Fx_est = Dx + ux * L4
                 Fy_est = Dy + uy * L4
@@ -222,60 +223,20 @@ canvas.bind("<Motion>", on_mouse_move)
 # --- Animation ---
 def animate():
     Fx, Fy = mouse_pos
-
     result = inverse_kinematics(Fx, Fy)
-
     if result:
         theta_cr, theta_blk = result
         draw_crank_rocker(theta_cr, theta_blk)
-
-        # --- Draw a small dot at the tip (F) for the trail ---
-        # Get the current F position from the last draw
-        Ax, Ay = Ax_origin, Ay_origin
-        Dx, Dy = rotate_point(Dx_origin, Dy_origin, Ax_origin, Ay_origin, theta_blk)
-
-        # direction of DF
-        vx = Dx - Dx  # not used for F position here
-        # compute DF direction from draw_crank_rocker logic
-        # we can just compute F
-        points = circle_circle_intersection(
-            Ax + (Dx-Ax)*pos_E_on_AD + L2 * math.cos(theta_blk + theta_cr), 
-            Ay + (Dy-Ay)*pos_E_on_AD + offset_AD_to_E + L2 * math.sin(theta_blk + theta_cr),
-            L3, Dx, Dy, L_DC
-        )
-
-        if points is None:
-            Cx_base, Cy_base = Dx, Dy + L_DC
-        else:
-            if points[0][1] > Dy:
-                Cx_base, Cy_base = points[0]
-            else:
-                Cx_base, Cy_base = points[1]
-
-        # DF direction
-        vx = Cx_base - Dx
-        vy = Cy_base - Dy
-        dist = math.hypot(vx, vy)
-        ux = vx / dist
-        uy = vy / dist
-
-        Fx_pos = Dx + ux * L4
-        Fy_pos = Dy + uy * L4
-
-        # Draw small dot for trail
         r = 3  # radius
-        canvas.create_oval(Fx_pos - r, Fy_pos - r, Fx_pos + r, Fy_pos + r, fill="red", outline="")
-
-        # --- Print values relative to A with down negative ---
         Fx_rel = (Fx - Ax_origin) / multiplier
         Fy_rel = (Ay_origin - Fy) / multiplier
         print(
-            f"Mouse relative to A: ({Fx_rel:.3f}, {Fy_rel:.3f})   "
+            f"Mouse relative to A: ({Fx:.3f}, {Fy:.3f})   "
             f"Theta crank relative: {theta_cr:.4f} rad   "
             f"Theta black: {theta_blk:.4f} rad"
         )
-
-    # --- Draw scale bar at bottom ---
+    else:
+        print("there is no value here")
     scale_length = 1 * multiplier  # 1 inch
     scale_x = 50
     scale_y = height - 50
