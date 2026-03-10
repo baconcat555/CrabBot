@@ -1,7 +1,7 @@
 import math
 import numpy
-
-
+from pathlib import Path
+import time
 # --- Scale factor ---
 multiplier = 30
 
@@ -165,14 +165,31 @@ def actualposition(theta_crank_relative, theta_black):
     position =  Fx,Fy
     return position
 
+def export_to_file(data,filename,type,binary):
+    output_dir = Path.cwd()/ "Kinematics_Library/Kinematics_Binaries"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    file_path = output_dir / filename
+    if type == 'csv':
+        numpy.savetxt(file_path, data, delimiter=",",fmt='%g')
+    elif type == 'txt':
+        numpy.savetxt(file_path, data,fmt='%s', delimiter=" ")
+    if binary:
+        new_file_name = filename.replace(".csv", ".bin")
+        new_file_name = new_file_name.replace(".txt", ".bin")
+        file_path = output_dir / new_file_name
+        data.tofile(file_path)
 
 
 #xbounds = 326,774
 #ybounds = 272,590
+
+print("Generating...")
+t0 = time.time()
+
 xbounds = 300,775
 ybounds = 275,600
 width, height = xbounds[1]-xbounds[0], ybounds[1]-ybounds[0]
-table_resolution = 100
+table_resolution = 150
 
 Theta_Crank = numpy.zeros([table_resolution, table_resolution],dtype=numpy.float16)
 Theta_Main = numpy.zeros([table_resolution, table_resolution],dtype=numpy.float16)
@@ -198,16 +215,12 @@ for i in range(table_resolution):
         else:
             validyn[i][j] = '@'
 
-
-
-
-numpy.savetxt("Theta_Crank.csv", Theta_Crank, delimiter=",",fmt='%g')
-numpy.savetxt("Theta_Main.csv", Theta_Main, delimiter=",",fmt='%g')
-numpy.savetxt("xs.csv", xs, delimiter=",",fmt='%g')
-numpy.savetxt("ys.csv", ys, delimiter=",",fmt='%g')
-numpy.savetxt("valid.txt", validyn,fmt='%s', delimiter=" ")
-Theta_Crank.tofile('Theta_Crank.bin')
-Theta_Crank.tofile('Theta_Main.bin')
-Theta_Crank.tofile('xs.bin')
-Theta_Crank.tofile('ys.bin')
-print("done")
+export_to_file(Theta_Crank,'Theta_Crank.csv','csv',True)
+export_to_file(Theta_Main,'Theta_Main.csv','csv',True)
+export_to_file(xs,'xs.csv','csv',False)
+export_to_file(ys,'ys.csv','csv',False)
+export_to_file(validyn,'valid.txt','txt',False)
+print("Complete.")
+t1 = time.time()
+total = t1-t0
+print("Time processing: "+str(total)+" seconds")
