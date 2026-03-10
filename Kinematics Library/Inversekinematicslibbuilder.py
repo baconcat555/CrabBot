@@ -123,8 +123,6 @@ def inverse_kinematics(Fx, Fy):
                     best = (theta_crank_rel, theta_black)
 
     return best
-
-
 # --- Drawing function ---
 def actualposition(theta_crank_relative, theta_black):
 
@@ -171,15 +169,15 @@ def actualposition(theta_crank_relative, theta_black):
 
 #xbounds = 326,774
 #ybounds = 272,590
-xbounds = 0,1000
-ybounds = 0,1000
+xbounds = 300,775
+ybounds = 275,600
 width, height = xbounds[1]-xbounds[0], ybounds[1]-ybounds[0]
-table_resolution = 50
+table_resolution = 100
 
-Theta_Crank = numpy.zeros([table_resolution, table_resolution])
-Theta_Main = numpy.zeros([table_resolution, table_resolution])
-xs = numpy.zeros([table_resolution, table_resolution])
-ys = numpy.zeros([table_resolution, table_resolution])
+Theta_Crank = numpy.zeros([table_resolution, table_resolution],dtype=numpy.float16)
+Theta_Main = numpy.zeros([table_resolution, table_resolution],dtype=numpy.float16)
+xs = numpy.zeros([table_resolution, table_resolution],dtype=numpy.float16)
+ys = numpy.zeros([table_resolution, table_resolution],dtype=numpy.float16)
 validyn = numpy.empty([table_resolution, table_resolution], dtype=str, order='C')
 
 for i in range(table_resolution):
@@ -193,9 +191,7 @@ for i in range(table_resolution):
         x1, y1= actualposition(theta_cr,theta_blk)
         xs[i][j] = x
         ys[i][j] = y
-
-
-        if abs(x-x1)>5:
+        if abs(x-x1)>5 or abs(y-y1)>5:
             validyn[i][j] = '.'
         elif result[0] != result[0]:
             validyn[i][j] = '.'
@@ -205,9 +201,13 @@ for i in range(table_resolution):
 
 
 
-numpy.savetxt("Theta_Crank.csv", Theta_Crank, delimiter=",")
-numpy.savetxt("Theta_Main.csv", Theta_Main, delimiter=",")
-numpy.savetxt("xs.csv", xs, delimiter=",")
-numpy.savetxt("ys.csv", ys, delimiter=",")
+numpy.savetxt("Theta_Crank.csv", Theta_Crank, delimiter=",",fmt='%g')
+numpy.savetxt("Theta_Main.csv", Theta_Main, delimiter=",",fmt='%g')
+numpy.savetxt("xs.csv", xs, delimiter=",",fmt='%g')
+numpy.savetxt("ys.csv", ys, delimiter=",",fmt='%g')
 numpy.savetxt("valid.txt", validyn,fmt='%s', delimiter=" ")
+Theta_Crank.tofile('Theta_Crank.bin')
+Theta_Crank.tofile('Theta_Main.bin')
+Theta_Crank.tofile('xs.bin')
+Theta_Crank.tofile('ys.bin')
 print("done")
