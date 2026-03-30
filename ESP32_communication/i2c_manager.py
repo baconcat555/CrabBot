@@ -14,6 +14,7 @@ class ESP32Device:
 
 
 class I2CManager:
+    #Can only support 100 cycles per second
     def __init__(self, bus_id=1):
         self.bus = SMBus(bus_id)
         #dict so can lookup via address
