@@ -2,8 +2,9 @@ from smbus2 import SMBus
 import time
 
 class ESP32Device:
-    def __init__(self, address, name=None):
+    def __init__(self, address, name=None,length=4):
         self.address = address
+        self.length = length
         self.name = name or f"ESP32_{hex(address)}"
 
 
@@ -18,12 +19,12 @@ class I2CManager:
         #dict so can lookup via address
         self.devices = {}
 
-    def add_device(self, address, name=None):
+    def add_device(self, address, name=None,length=4):
         if address in self.devices:
             #if the device has already been added
             #trigger exception
             raise ValueError(f"Device at address {hex(address)} already exists")
-        device = ESP32Device(address, name)
+        device = ESP32Device(address, name,length)
         #add to dict
         self.devices[address] = device
         return device
@@ -51,13 +52,13 @@ class I2CManager:
         except Exception as e:
             print(f"Write error to {hex(address)}: {e}")
 
-    def read(self, address, length):
+    def read(self, address):
         #will trigger ".onrRequest" function on ESP32 on the ESP32 this event is an INTERUPT
         if address not in self.devices:
             raise ValueError("Device not registered")
 
         try:
-            return self.bus.read_i2c_block_data(address, 0x00, length)
+            return self.bus.read_i2c_block_data(address, 0x00, self.devices[address].length)
         except Exception as e:
             print(f"Read error from {hex(address)}: {e}")
             return None
